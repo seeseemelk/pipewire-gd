@@ -1,11 +1,12 @@
 use godot::prelude::*;
 use godot::engine::Engine;
 
-mod pipewire_client;
-mod pipewire_texture;
+mod client;
+mod resource;
+mod channels;
 
-use crate::pipewire_client::PipewireClient;
-use crate::pipewire_texture::PipewireTexture;
+use crate::client::PipewireClient;
+use crate::resource::PipewireTexture;
 
 struct PipewireExtension;
 
