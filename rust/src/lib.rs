@@ -4,6 +4,7 @@ use godot::engine::Engine;
 mod client;
 mod resource;
 mod channels;
+mod stream;
 
 use crate::client::PipewireClient;
 use crate::resource::PipewireTexture;
