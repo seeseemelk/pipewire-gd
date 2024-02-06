@@ -5,7 +5,6 @@ use godot::prelude::Gd;
 use godot::engine::Image;
 
 // used to notify when new resources are allocated
-
 pub enum PipewireResourceNotifyAction {
     CREATED,
     DELETED,
@@ -20,7 +19,7 @@ pub struct ImageParameters {
 }
 
 pub struct ImageBuffer {
-    pub data: Vec<u8>,
+    pub samples: Vec<u8>,
     pub size: usize,
 }
 
@@ -33,8 +32,4 @@ pub struct PipewireUpdateNotify {
 pub struct PipewireResourceNotify {
     pub action: PipewireResourceNotifyAction,
     pub source_id: Option<u32>,
-}
-
-pub struct UserData {
-    pub format: pipewire::spa::param::video::VideoInfoRaw,
 }

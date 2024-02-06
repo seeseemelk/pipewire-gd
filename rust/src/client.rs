@@ -30,10 +30,10 @@ impl INode for PipewireClient {
         let Ok(loop_) = pw::Loop::new() else { panic!(); };
         let Ok(context) = pw::Context::new(&loop_) else { panic!(); };
         let Ok(core) = context.connect(None) else { panic!(); };
-        let Ok(registry) = core.get_registry() else { panic!(); };
-        let (sender, receiver) = std::sync::mpsc::channel();
+        let Ok(_registry) = core.get_registry() else { panic!(); };
+        let (_sender, receiver) = std::sync::mpsc::channel();
 
-        let mut available_sources = HashSet::new();
+        let available_sources = HashSet::new();
 
         // TODO listen for list of sources
         // let _sourcesListener = registry

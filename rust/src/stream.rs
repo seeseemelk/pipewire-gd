@@ -1,18 +1,27 @@
+use std::rc::Rc;
+use std::sync::mpsc::{Sender, Receiver};
+use std::sync::{Arc, Mutex};
+
 use pipewire as pw;
+use pw::stream::Stream;
 use pw::{properties, spa};
 use spa::pod::Pod;
 use godot::prelude::*;
 
-use crate::channels::UserData;
+use crate::channels::{ImageBuffer, ImageParameters};
 use crate::client::PipewireClient;
 use crate::resource::PipewireTexture;
+
+struct StreamState {
+    pw_listener: pw::stream::StreamListener<StreamData>,
+}
 
 #[derive(GodotClass)]
 #[class(tool, init, base=Node)]
 pub struct PipewireStream {
     #[var]
     pub source_id: u32,
-    listener: Option<pw::stream::StreamListener<UserData>>,
+    state: Option<StreamState>,
 
     #[base]
     base: Base<Node>
@@ -21,6 +30,8 @@ pub struct PipewireStream {
 // signals
 static SIGNAL_PARAMETERS_CHANGED: &str = "frame_parameters_changed";
 static SIGNAL_FRAME_UPDATE: &str = "frame_update";
+
+struct StreamData;
 
 #[godot_api]
 impl PipewireStream {
@@ -39,12 +50,12 @@ impl PipewireStream {
 
 #[godot_api]
 impl INode for PipewireStream {
-    
     fn enter_tree(&mut self) {
+        let source_id = self.source_id;
         let Some(parent_node) = self.base().get_parent() else { return; };
         let Ok(client) = parent_node.try_cast::<PipewireClient>() else { return; };
         let pw_core = &client.bind().pw_core;
-
+        
         let Ok(stream) = pipewire::stream::Stream::new(
             pw_core,
             "video-texture",
@@ -55,13 +66,9 @@ impl INode for PipewireStream {
             )
         ) else { return; };
 
-        let data = UserData {
-            format: Default::default(),
-        };
-
         let Ok(_listener) = stream
-            .add_local_listener_with_user_data(data)
-            .param_changed(move |_, id, user_data, param| {
+            .add_local_listener_with_user_data(StreamData)
+            .param_changed( move |_, id, _, param| {
                 let Some(param) = param else {
                     return;
                 };
@@ -82,47 +89,53 @@ impl INode for PipewireStream {
                     return;
                 }
 
-                user_data
-                    .format
+                let mut fmt = pipewire::spa::param::video::VideoInfoRaw::default();
+                fmt
                     .parse(param)
                     .expect("Failed to parse param changed to VideoInfoRaw");
 
-                let Ok(width) = user_data.format.size().width.try_into() else { return };
-                let Ok(height) = user_data.format.size().height.try_into() else { return };
+                let Ok(width) = fmt.size().width.try_into() else { return };
+                let Ok(height) = fmt.size().height.try_into() else { return };
                 
-                let img = godot::engine::Image::create(
-                    width, height, false,
+                if let Some(img) = godot::engine::Image::create(
+                    width, height,
+                    false,
                     godot::engine::image::Format::RGBA8
-                );
-
-                self.base_mut().emit_signal(
-                    StringName::from(SIGNAL_PARAMETERS_CHANGED),
-                    &[img.to_variant()],
-                );
+                ) {
+                    self.base().emit_signal(
+                        StringName::from(SIGNAL_PARAMETERS_CHANGED),
+                        &[img.to_variant()],
+                    );
+                }
             })
             .process(move |stream, _| {
-                let Some( mut buffer) = stream.dequeue_buffer() else { return; };
-                if buffer.datas_mut().is_empty() {
-                    return;
-                }
+                match stream.dequeue_buffer() {
+                    None => println!("out of buffers"),
+                    Some(mut buffer) => {
+                        let datas = buffer.datas_mut();
+                        if datas.is_empty() {
+                            return;
+                        }
+    
+                        // copy frame data to screen
+                        let data = &mut datas[0];
+                        let chunk = data.chunk();
+                        if let Some(samples) = data.data() {
+                            let Ok(size) = chunk.size().try_into() else { return; };
 
-                let Some(data) = buffer.datas_mut().get(0) else { return; };
-                
-                // move frame data to godot byte array
-                let Some(samples) = data.data() else { return; };
-                let chunk = data.chunk();
-                let Ok(size) = chunk.size().try_into() else { return; };
-                let mut buffer = PackedByteArray::new();
-                buffer.resize(size);
-                for i in 0..size {
-                    buffer.set(i, samples[i]);
+                            let mut buffer = PackedByteArray::new();
+                            buffer.resize(size);
+                            for i in 0..size {
+                                buffer.set(i, samples[i]);
+                            }
+                            
+                            self.base().emit_signal(
+                                StringName::from(SIGNAL_FRAME_UPDATE),
+                                &[buffer.to_variant()],
+                            );
+                        }
+                    }
                 }
-                
-                self.base_mut().emit_signal(
-                    StringName::from(SIGNAL_FRAME_UPDATE),
-                    &[buffer.to_variant()],
-                );
-
             })
             .register() else { return; };
 
@@ -195,22 +208,19 @@ impl INode for PipewireStream {
         let mut params = [Pod::from_bytes(&values).unwrap()];
         stream.connect(
             libspa::Direction::Input,
-            Some(self.source_id),
+            Some(source_id),
             pw::stream::StreamFlags::AUTOCONNECT | pw::stream::StreamFlags::MAP_BUFFERS,
             &mut params,
         );
 
-        self.listener = Some(_listener);
+        self.state = Some(StreamState {
+            pw_listener: _listener,
+        });
     }
 
     fn exit_tree(&mut self) {
-        let Some(listener) = &self.listener else { return; };
-
-        drop(listener);
-        self.listener = None;
-    }
-
-    fn process(&mut self, _delta: f64) {
-
+        if let Some(state) = &self.state {
+            drop(&state.pw_listener); 
+        };
     }
 }
