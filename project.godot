@@ -11,5 +11,10 @@ config_version=5
 [application]
 
 config/name="example_project"
-config/features=PackedStringArray("4.2", "Forward Plus")
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")
 config/icon="res://icon.svg"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/pipewire-gd/plugin.cfg")
