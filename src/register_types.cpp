@@ -11,8 +11,6 @@
 
 using namespace godot;
 
-static PipewireServer *_pw_singleton;
-
 void gdextension_initialize(ModuleInitializationLevel p_level)
 {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE)
@@ -26,8 +24,6 @@ void gdextension_terminate(ModuleInitializationLevel p_level)
 {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE)
 	{
-		Engine::get_singleton()->unregister_singleton("PipewireServer");
-		memdelete(_pw_singleton);
 	}
 }
 

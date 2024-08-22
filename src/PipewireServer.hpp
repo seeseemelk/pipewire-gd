@@ -16,25 +16,25 @@ class PipewireServer : public Node
 {
 	GDCLASS(PipewireServer, Node);
 
-	static PipewireServer *singleton;
-
 private:
-	pw_loop *loop;
-	pw_core *core;
-	pw_context *context;
-	pw_registry *registry;
+	struct pw_loop *loop;
+	struct pw_core *core;
+	struct pw_context *context;
+	
+	struct pw_registry *registry;
+	struct spa_hook *registry_listener;
 
 protected:
 	static void _bind_methods();
 	
 public:
-	static PipewireServer *get_singleton();
-	Array sources;
+	Dictionary *sources;
 
 	PipewireServer();
 	~PipewireServer();
 
-	Array get_sources(); 
+	Dictionary get_sources(); 
+	void _enter_tree() override;
+	void _exit_tree() override;
 	void _process(double delta) override;
-
 };
