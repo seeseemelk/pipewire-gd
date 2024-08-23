@@ -1,13 +1,10 @@
 #pragma once
 
 #include <godot_cpp/classes/node.hpp>
-#include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/engine.hpp>
-#include <godot_cpp/classes/scene_tree.hpp>
-#include <godot_cpp/classes/window.hpp>
-
+#include <godot_cpp/classes/thread.hpp>
 #include <pipewire/pipewire.h>
 
 using namespace godot;
@@ -17,6 +14,7 @@ class PipewireServer : public Node
 	GDCLASS(PipewireServer, Node);
 
 private:
+	Ref<Thread> thread_loop;
 	struct pw_loop *loop;
 	struct pw_core *core;
 	struct pw_context *context;
@@ -28,7 +26,8 @@ protected:
 	static void _bind_methods();
 	
 public:
-	Dictionary *sources;
+	Dictionary sources;
+	bool running;
 
 	PipewireServer();
 	~PipewireServer();
@@ -36,5 +35,9 @@ public:
 	Dictionary get_sources(); 
 	void _enter_tree() override;
 	void _exit_tree() override;
-	void _process(double delta) override;
+
+	void poll_pw();
+
+	void add_source(Dictionary source);
+	void remove_source(int32_t source_id);
 };

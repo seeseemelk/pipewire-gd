@@ -5,6 +5,14 @@
 
 using namespace godot;
 
+static const char* REGISTRY_OBJECT_ADD = "registry_object_found";
+static const char* REGISTRY_OBJECT_REMOVE = "registry_object_lost";
+
+typedef struct {
+	uint32_t id;
+} registry_event_remove_message;
+
+
 // Converts pipewire registry event details
 // into a dictionary to be exposed in godot
 static void on_registry_event(void *_data, uint32_t id,
@@ -12,25 +20,29 @@ static void on_registry_event(void *_data, uint32_t id,
                 const struct spa_dict *props) {
 	PipewireServer *server = (PipewireServer*)_data;
 
-	int64_t _id = id;
 	Dictionary msg;
-	msg["id"] = _id;
+	msg["id"] = id;
 	msg["type"] = type;
 	msg["version"] = version;
 
-	server->emit_signal(
-		"registry_object_found",
-		msg
-	);
-	godot::UtilityFunctions::print("[pw] connecting to pipewire", msg);
-	//server->sources[_id] = msg;
+	callable_mp(server, &PipewireServer::add_source).call_deferred(msg);
 }
 
 static void on_registry_remove_event(void *_data, uint32_t id) {
 	PipewireServer *server = (PipewireServer*)_data;
-
-	server->sources->erase(id);
+	
+	callable_mp(server, &PipewireServer::remove_source).call_deferred((int32_t)id);
 }
+
+// interrupts pipewire thread
+static int do_stop(struct spa_loop *loop, bool async, uint32_t seq,
+		const void *data, size_t size, void *_data)
+{
+	PipewireServer *server = (PipewireServer*)_data;
+	server->running = false;
+	return 0;
+}
+
 
 static const struct pw_registry_events registry_events = {
 	PW_VERSION_REGISTRY_EVENTS,
@@ -40,12 +52,8 @@ static const struct pw_registry_events registry_events = {
 
 void PipewireServer::_bind_methods()
 {
-	ADD_SIGNAL(MethodInfo("registry_object_found", PropertyInfo(Variant::DICTIONARY, "object")));
-	//ClassDB::bind_signal("registry_object_found")
-}
-
-Dictionary PipewireServer::get_sources() {
-	return *(this->sources);
+	ADD_SIGNAL(MethodInfo(REGISTRY_OBJECT_ADD, PropertyInfo(Variant::DICTIONARY, "object")));
+	ADD_SIGNAL(MethodInfo(REGISTRY_OBJECT_REMOVE, PropertyInfo(Variant::DICTIONARY, "object")));
 }
 
 PipewireServer::PipewireServer()
@@ -72,43 +80,69 @@ PipewireServer::PipewireServer()
 	spa_zero(*(this->registry_listener));
 	
 	pw_registry_add_listener(this->registry, this->registry_listener, &registry_events, this);
-
 	
 	godot::UtilityFunctions::print("[pw] pipewire initialized");
-}
-
-void PipewireServer::_enter_tree() {
-	godot::UtilityFunctions::print("[pw] entering loop");
-	pw_loop_enter(this->loop);
-}
-
-void PipewireServer::_exit_tree() {
-	godot::UtilityFunctions::print("[pw] exiting loop");
-	pw_loop_leave(this->loop);
-}
-
-void PipewireServer::_process(double delta) {
-	int res;
-	ERR_FAIL_COND(this->loop == nullptr);
-
-	// TODO look into using thread loop instead, since this blocks when waiting for new
-	// messages from pipewire
-	if (res = pw_loop_iterate(this->loop, -1) < 0) {
-		// ignore interrupts
-		if (res == -EINTR) {
-			return;
-		}
-		godot::UtilityFunctions::print("[pw] err when attempting loop");
-		this->set_process(false);
-	}
-	godot::UtilityFunctions::print("[pw] loop, res: ", res);
 }
 
 PipewireServer::~PipewireServer()
 {
 	ERR_FAIL_COND(this->loop == nullptr);
-	
+
 	pw_proxy_destroy((struct pw_proxy*)this->registry);
 	pw_core_disconnect(this->core);
 	pw_context_destroy(this->context);
+}
+
+void PipewireServer::_enter_tree() {
+	this->thread_loop.instantiate();
+	this->thread_loop->start(callable_mp(this, &PipewireServer::poll_pw));
+}
+
+void PipewireServer::_exit_tree() {
+	godot::UtilityFunctions::print("[pw] exiting loop", this->is_inside_tree());
+	pw_loop_invoke(this->loop, do_stop, 1, NULL, 0, false, this);
+
+	if (this->thread_loop->is_alive()) {
+		this->thread_loop->wait_to_finish();
+	}
+	this->thread_loop->unreference();
+}
+
+void PipewireServer::poll_pw() {
+	godot::UtilityFunctions::print("[pw] entering loop");
+
+	this->running = true;
+	
+	pw_loop_enter(this->loop);
+	while (this->running) {
+		int res;
+		if (res = pw_loop_iterate(this->loop, -1) < 0) {
+			if (res != -EINTR) {
+				break;
+			}
+		}
+	}
+	pw_loop_leave(this->loop);
+}
+
+Dictionary PipewireServer::get_sources() {
+	return this->sources;
+}
+
+void PipewireServer::add_source(Dictionary source) {
+	this->sources[source["id"]] = source;
+
+	godot::UtilityFunctions::print("[pw] source: ", source);
+	this->emit_signal(
+		REGISTRY_OBJECT_ADD,
+		source
+	);
+}
+
+void PipewireServer::remove_source(int32_t id) {
+	this->sources.erase(id);
+	this->emit_signal(
+		REGISTRY_OBJECT_REMOVE,
+		id
+	);
 }
