@@ -6,17 +6,25 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/godot.hpp>
 
-#include "PipewireTexture.hpp"
-#include "PipewireServer.hpp"
+#include "loop.hpp"
+#include "server.hpp"
+#include "texture.hpp"
 
 using namespace godot;
+
+static PipewireServer *_pw_singleton;
+static const char* singleton_name = "PipewireServer";
 
 void gdextension_initialize(ModuleInitializationLevel p_level)
 {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE)
 	{
+		ClassDB::register_class<PipewireLoop>();
 		ClassDB::register_class<PipewireServer>();
 		ClassDB::register_class<PipewireTexture>();
+
+		_pw_singleton = memnew(PipewireServer);
+		Engine::get_singleton()->register_singleton(singleton_name, PipewireServer::get_singleton());
 	}
 }
 
@@ -24,6 +32,8 @@ void gdextension_terminate(ModuleInitializationLevel p_level)
 {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE)
 	{
+		Engine::get_singleton()->unregister_singleton(singleton_name);
+		memdelete(_pw_singleton);
 	}
 }
 
