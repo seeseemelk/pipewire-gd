@@ -152,6 +152,15 @@ void PipewireLoop::prepare_stream(char* path, pw_properties *props) {
     uint8_t buffer[1024];
     spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
     const spa_pod *params[1];
+
+    auto rect240 = SPA_RECTANGLE(320, 240);
+    auto rect1 = SPA_RECTANGLE(1, 1);
+    auto rect4096 = SPA_RECTANGLE(4096, 4096);
+
+    auto fract25 = SPA_FRACTION(25, 1);
+    auto fract0 = SPA_FRACTION(0, 1);
+    auto fract1000 = SPA_FRACTION(1000, 1);
+
     auto p = spa_pod_builder_add_object(&b,
         SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat,
         SPA_FORMAT_mediaType,       SPA_POD_Id(SPA_MEDIA_TYPE_video),
@@ -165,13 +174,13 @@ void PipewireLoop::prepare_stream(char* path, pw_properties *props) {
                                         SPA_VIDEO_FORMAT_YUY2,
                                         SPA_VIDEO_FORMAT_I420),
         SPA_FORMAT_VIDEO_size,      SPA_POD_CHOICE_RANGE_Rectangle(
-                                        &SPA_RECTANGLE(320, 240),
-                                        &SPA_RECTANGLE(1, 1),
-                                        &SPA_RECTANGLE(4096, 4096)),
+                                        &rect240,
+                                        &rect1,
+                                        &rect4096),
         SPA_FORMAT_VIDEO_framerate, SPA_POD_CHOICE_RANGE_Fraction(
-                                        &SPA_FRACTION(25, 1),
-                                        &SPA_FRACTION(0, 1),
-                                        &SPA_FRACTION(1000, 1))
+                                        &fract25,
+                                        &fract0,
+                                        &fract1000)
     );
     params[0] = (spa_pod*)p;
 

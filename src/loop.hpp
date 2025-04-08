@@ -13,9 +13,9 @@
 
 using namespace godot;
 
-const char* PW_SIGNAL = "pw_event";
-const char* PW_REGISTRY_ADD = "registry:add_source";
-const char* PW_REGISTRY_REMOVE = "registry:remove_source";
+inline const char* PW_SIGNAL = "pw_event";
+inline const char* PW_REGISTRY_ADD = "registry:add_source";
+inline const char* PW_REGISTRY_REMOVE = "registry:remove_source";
 
 /**
  * Pipewire requires a thread/loop per source that it's listening to
